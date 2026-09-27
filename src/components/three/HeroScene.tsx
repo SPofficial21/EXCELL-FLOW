@@ -1,4 +1,4 @@
-import { Suspense, useMemo, useRef } from "react";
+import { Suspense, useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, type ThreeElements } from "@react-three/fiber";
 import { Float, MeshDistortMaterial, RoundedBox, Stars } from "@react-three/drei";
 import type { Group, Mesh } from "three";
@@ -85,8 +85,28 @@ function DataCell({ palette, index, position, clean }: CellProps) {
   );
 }
 
+/**
+ * Tracks the pointer on `window` rather than through R3F's event manager: the
+ * canvas is `pointer-events-none` so it never steals clicks from the hero CTAs.
+ */
+function useWindowPointer() {
+  const pointer = useRef({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const onMove = (event: PointerEvent) => {
+      pointer.current.x = (event.clientX / window.innerWidth) * 2 - 1;
+      pointer.current.y = -((event.clientY / window.innerHeight) * 2 - 1);
+    };
+    window.addEventListener("pointermove", onMove, { passive: true });
+    return () => window.removeEventListener("pointermove", onMove);
+  }, []);
+
+  return pointer;
+}
+
 function SpreadsheetSwarm({ palette }: { palette: Palette }) {
   const group = useRef<Group>(null);
+  const pointer = useWindowPointer();
 
   const cells = useMemo(() => {
     const rows = 4;
@@ -103,11 +123,11 @@ function SpreadsheetSwarm({ palette }: { palette: Palette }) {
     return out;
   }, []);
 
-  useFrame(({ clock, pointer }) => {
+  useFrame(({ clock }) => {
     if (!group.current) return;
     const t = clock.getElapsedTime();
-    group.current.rotation.y = Math.sin(t * 0.3) * 0.35 + pointer.x * 0.35;
-    group.current.rotation.x = -pointer.y * 0.22;
+    group.current.rotation.y = Math.sin(t * 0.3) * 0.35 + pointer.current.x * 0.35;
+    group.current.rotation.x = -pointer.current.y * 0.22;
   });
 
   return (

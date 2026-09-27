@@ -6,6 +6,7 @@ export type CleanReport = {
   duplicatesRemoved: number;
   emptyRowsRemoved: number;
   cellsTrimmed: number;
+  sheets: string[];
   headers: string[];
   preview: string[][];
 };
@@ -16,6 +17,8 @@ export type CleanResult = {
 };
 
 const ACCEPTED = [".csv", ".xls", ".xlsx"];
+
+const FORMULA_PREFIX = /^[=+@\t\r]|^-(?![\d.])/;
 
 export function isSupportedFile(name: string): boolean {
   const lower = name.toLowerCase();
@@ -28,13 +31,20 @@ function normalizeCell(value: unknown): string {
   return String(value).replace(/\s+/g, " ").trim();
 }
 
-/**
- * Trims whitespace, drops fully empty rows and exact duplicate rows from the
- * first sheet of a workbook.
- */
-export function cleanWorkbook(input: XLSX.WorkBook): CleanResult {
-  const sheetName = input.SheetNames[0];
-  const sheet = input.Sheets[sheetName];
+/** Neutralizes cells a spreadsheet app would evaluate as a formula. */
+function defuseFormula(value: string): string {
+  return FORMULA_PREFIX.test(value) ? `'${value}` : value;
+}
+
+type SheetStats = {
+  rows: string[][];
+  rowsIn: number;
+  cellsTrimmed: number;
+  emptyRowsRemoved: number;
+  duplicatesRemoved: number;
+};
+
+function cleanSheet(sheet: XLSX.WorkSheet): SheetStats {
   const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: false, defval: "" });
 
   let cellsTrimmed = 0;
@@ -47,7 +57,7 @@ export function cleanWorkbook(input: XLSX.WorkBook): CleanResult {
       const raw = cell === null || cell === undefined ? "" : String(cell);
       const cleaned = normalizeCell(cell);
       if (cleaned !== raw) cellsTrimmed += 1;
-      return cleaned;
+      return defuseFormula(cleaned);
     });
     if (cleanedRow.every((cell) => cell === "")) {
       emptyRowsRemoved += 1;
@@ -56,11 +66,11 @@ export function cleanWorkbook(input: XLSX.WorkBook): CleanResult {
     normalized.push(cleanedRow);
   }
 
-  const [headers = [], ...body] = normalized;
+  const [headers, ...body] = normalized;
   const seen = new Set<string>();
   const deduped: string[][] = [];
   for (const row of body) {
-    const key = row.join("\u0001").toLowerCase();
+    const key = row.join("\u0001");
     if (seen.has(key)) {
       duplicatesRemoved += 1;
       continue;
@@ -69,21 +79,58 @@ export function cleanWorkbook(input: XLSX.WorkBook): CleanResult {
     deduped.push(row);
   }
 
-  const outputRows = headers.length ? [headers, ...deduped] : deduped;
-  const outSheet = XLSX.utils.aoa_to_sheet(outputRows);
+  return {
+    rows: headers ? [headers, ...deduped] : deduped,
+    rowsIn: rows.length,
+    cellsTrimmed,
+    emptyRowsRemoved,
+    duplicatesRemoved,
+  };
+}
+
+/**
+ * Trims whitespace and drops empty and duplicate rows from every sheet of a
+ * workbook. Values are emitted as text, so numeric formats and formulas from
+ * the source workbook are not carried over.
+ */
+export function cleanWorkbook(input: XLSX.WorkBook): CleanResult {
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, outSheet, "Cleaned");
+
+  let rowsIn = 0;
+  let rowsOut = 0;
+  let cellsTrimmed = 0;
+  let emptyRowsRemoved = 0;
+  let duplicatesRemoved = 0;
+  let headers: string[] = [];
+  let preview: string[][] = [];
+
+  input.SheetNames.forEach((name, index) => {
+    const stats = cleanSheet(input.Sheets[name]);
+    rowsIn += stats.rowsIn;
+    rowsOut += stats.rows.length;
+    cellsTrimmed += stats.cellsTrimmed;
+    emptyRowsRemoved += stats.emptyRowsRemoved;
+    duplicatesRemoved += stats.duplicatesRemoved;
+
+    if (index === 0) {
+      headers = stats.rows[0] ?? [];
+      preview = stats.rows.slice(1, 6);
+    }
+
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(stats.rows), name.slice(0, 31));
+  });
 
   return {
     workbook,
     report: {
-      rowsIn: rows.length,
-      rowsOut: outputRows.length,
+      rowsIn,
+      rowsOut,
       duplicatesRemoved,
       emptyRowsRemoved,
       cellsTrimmed,
+      sheets: input.SheetNames,
       headers,
-      preview: deduped.slice(0, 5),
+      preview,
     },
   };
 }

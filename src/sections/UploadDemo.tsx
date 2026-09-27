@@ -13,6 +13,7 @@ type Status = "idle" | "working" | "done" | "error";
 export function UploadDemo() {
   const inputRef = useRef<HTMLInputElement>(null);
   const workbookRef = useRef<XLSX.WorkBook | null>(null);
+  const requestRef = useRef(0);
   const [dragging, setDragging] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
   const [message, setMessage] = useState("");
@@ -20,6 +21,11 @@ export function UploadDemo() {
   const [report, setReport] = useState<CleanReport | null>(null);
 
   const handleFile = async (file: File) => {
+    const requestId = requestRef.current + 1;
+    requestRef.current = requestId;
+    workbookRef.current = null;
+    setReport(null);
+
     if (!isSupportedFile(file.name)) {
       setStatus("error");
       setMessage("Unsupported file. Upload a .csv, .xls or .xlsx file.");
@@ -37,10 +43,12 @@ export function UploadDemo() {
 
     try {
       const result = await cleanFile(file);
+      if (requestRef.current !== requestId) return;
       workbookRef.current = result.workbook;
       setReport(result.report);
       setStatus("done");
     } catch {
+      if (requestRef.current !== requestId) return;
       setStatus("error");
       setMessage("We couldn't read that file. Try re-exporting it from Excel.");
     }
@@ -55,6 +63,7 @@ export function UploadDemo() {
 
   const onPick = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
+    event.target.value = "";
     if (file) void handleFile(file);
   };
 
