@@ -18,8 +18,12 @@ export function Hero() {
     <section id="top" className="relative overflow-hidden pt-28 pb-20 sm:pt-36">
       <div aria-hidden className="grid-backdrop absolute inset-0" />
       <Suspense fallback={null}>
-        <HeroScene className="pointer-events-none absolute inset-x-0 top-10 h-[620px] opacity-90" />
+        <HeroScene className="pointer-events-none absolute inset-x-0 top-10 h-[620px] opacity-60 dark:opacity-90" />
       </Suspense>
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_45%_at_50%_38%,hsl(var(--background)/0.88),transparent_70%)] dark:bg-[radial-gradient(60%_45%_at_50%_38%,hsl(var(--background)/0.62),transparent_70%)]"
+      />
 
       <div className="relative mx-auto max-w-4xl px-5 text-center">
         <motion.p

@@ -119,8 +119,8 @@ export function UploadDemo() {
           />
           <Button onClick={() => inputRef.current?.click()}>Choose a file</Button>
 
-          <AnimatePresence mode="wait">
-            {status === "working" && (
+          <AnimatePresence initial={false} mode="wait">
+            {status === "working" ? (
               <motion.p
                 key="working"
                 initial={{ opacity: 0, y: 8 }}
@@ -131,9 +131,7 @@ export function UploadDemo() {
                 <Loader2 className="h-4 w-4 animate-spin" />
                 {message}
               </motion.p>
-            )}
-
-            {status === "error" && (
+            ) : status === "error" ? (
               <motion.p
                 key="error"
                 initial={{ opacity: 0, y: 8 }}
@@ -144,9 +142,7 @@ export function UploadDemo() {
                 <AlertTriangle className="h-4 w-4" />
                 {message}
               </motion.p>
-            )}
-
-            {status === "done" && report && (
+            ) : status === "done" && report ? (
               <motion.div
                 key="done"
                 initial={{ opacity: 0, rotateX: 18, y: 16 }}
@@ -177,7 +173,7 @@ export function UploadDemo() {
                   Download cleaned file
                 </Button>
               </motion.div>
-            )}
+            ) : null}
           </AnimatePresence>
         </motion.div>
       </Reveal>
